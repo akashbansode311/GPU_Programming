@@ -5,7 +5,7 @@
 void serial_matrix_mult(int* h_a, int* h_b, int* h_result, int n);
 
 int main() {
-    int n = 128;
+    int n = 1280;
     int *a, *b, *c;
 
     // Allocate memory
