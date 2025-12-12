@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <cuda_runtime.h>
 
-#define MATRIX_SIZE 25000
+#define MATRIX_SIZE 1280
 
 // CUDA kernel for matrix multiplication using global memory
 __global__ void matrixMultiply(float *A, float *B, float *C, int width) {
