@@ -1,72 +1,81 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <cuda_runtime.h>
+#include <cuda.h>
 
-#define MATRIX_SIZE 1280
+#define MATRIX_SIZE 1280  // Define the matrix size
 
-// CUDA kernel for matrix multiplication using global memory
-__global__ void matrixMultiply(float *A, float *B, float *C, int width) {
+// GPU kernel
+__global__ void gpu_matrix_mult(int *a, int *b, int *c, int n) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int sum = 0;
 
-    if (row < width && col < width) {
-        float sum = 0.0;
-        for (int k = 0; k < width; ++k) {
-            sum += A[row * width + k] * B[k * width + col];
-        }
-        C[row * width + col] = sum;
+    if (row < n && col < n) {
+        for (int i = 0; i < n; i++)
+            sum += a[row * n + i] * b[i * n + col];
+        c[row * n + col] = sum;
     }
 }
 
 int main() {
-    int width = MATRIX_SIZE;
-    size_t size = width * width * sizeof(float);
+    int n = MATRIX_SIZE;  // Use the macro for matrix size
+    printf("Matrix size chosen: %d x %d\n", n, n);
 
-    // Host matrices and result
-    float *h_A, *h_B, *h_C;
-    h_A = (float *)malloc(size);
-    h_B = (float *)malloc(size);
-    h_C = (float *)malloc(size);
+    // Host (pinned) memory
+    int *h_a = (int*)malloc(sizeof(int) * n * n);
+    int *h_b = (int*)malloc(sizeof(int) * n * n);
+    int *h_c = (int*)malloc(sizeof(int) * n * n);
 
-    // Initialize matrices A and B
-    for (int i = 0; i < width * width; ++i) {
-        h_A[i] = 1.0; // Replace with your initialization
-        h_B[i] = 2.0; // Replace with your initialization
+
+    // Initialize matrices
+    for (int i = 0; i < n * n; i++) {
+        h_a[i] = 2;
+        h_b[i] = 3;
     }
 
-    // Device matrices and result
-    float *d_A, *d_B, *d_C;
-    cudaMalloc(&d_A, size);
-    cudaMalloc(&d_B, size);
-    cudaMalloc(&d_C, size);
+    // Device memory
+    int *d_a, *d_b, *d_c;
+    cudaMalloc((void **)&d_a, sizeof(int) * n * n);
+    cudaMalloc((void **)&d_b, sizeof(int) * n * n);
+    cudaMalloc((void **)&d_c, sizeof(int) * n * n);
 
-    // Copy matrices A and B from host to device
-    cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
+    // Copy data to device
+    cudaMemcpy(d_a, h_a, sizeof(int) * n * n, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b, h_b, sizeof(int) * n * n, cudaMemcpyHostToDevice);
 
-    // Define block size
-    int BLOCK_SIZE = 16;
+    // Define block size before dim3
+    int BLOCK_SIZE = 16;  // Threads per block in x and y
 
-    // Define grid and block dimensions
+    // Compute grid and block sizes
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 dimGrid((width + BLOCK_SIZE - 1) / BLOCK_SIZE, (width + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE,
+                 (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
-    // Launch kernel for matrix multiplication
-    matrixMultiply<<<dimGrid, dimBlock>>>(d_A, d_B, d_C, width);
+    // GPU timing
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
-    // Copy matrix C from device to host
-    cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost);
+    cudaEventRecord(start, 0);
+    gpu_matrix_mult<<<dimGrid, dimBlock>>>(d_a, d_b, d_c, n);
+    cudaDeviceSynchronize();
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
 
-    // Verify results (print some elements if needed)
-    printf("Sample result: C[0][0] = %f\n", h_C[0]);
+    // Copy result back
+    cudaMemcpy(h_c, d_c, sizeof(int) * n * n, cudaMemcpyDeviceToHost);
+
+    // Measure elapsed time
+    float gpu_time_ms;
+    cudaEventElapsedTime(&gpu_time_ms, start, stop);
+
+    printf("Naive GPU matrix multiplication %dx%d: %f ms\n", n, n, gpu_time_ms);
+    printf("Sample result C[12][0] = %d (expected %d)\n", h_c[12 * n + 0], 2*3*n);
 
     // Free memory
-    free(h_A);
-    free(h_B);
-    free(h_C);
-    cudaFree(d_A);
-    cudaFree(d_B);
-    cudaFree(d_C);
+    cudaFree(d_a); cudaFree(d_b); cudaFree(d_c);
+    free(h_a); free(h_b); free(h_c);
+    cudaEventDestroy(start); cudaEventDestroy(stop);
 
     return 0;
 }
