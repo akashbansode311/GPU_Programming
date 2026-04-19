@@ -7,9 +7,11 @@
 #SBATCH --time=00:30:00                  # Max time (hh:mm:ss)
 
 # Load CUDA module (adjust according to your system)
-module load cuda-11.2
+#module load cuda-11.2
+. /home/apps/spack/share/spack/setup-env.sh
+spack load cuda/snntalj
 
-cd /home/vamshis/ICTS/ICTS_GPU_Programming
+cd $HOME/GPU_Programming
 
 # Run the CUDA executable
-time ./test_1
+time ./filename
